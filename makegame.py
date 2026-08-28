@@ -26,8 +26,8 @@ pygame.display.set_caption("WASD 이동 + 몬스터 배치 & 충돌 처리")
 
 # 맵(월드) 전체 크기. 화면(SCREEN_WIDTH x SCREEN_HEIGHT)보다 훨씬 커서
 # 플레이어가 이동하면 화면에 안 보이던 부분이 새로 보이게 됨.
-MAP_WIDTH = 2400
-MAP_HEIGHT = 1800
+MAP_WIDTH = 1200
+MAP_HEIGHT = 900
 
 clock = pygame.time.Clock()
 FPS = 60
@@ -161,8 +161,12 @@ def draw_player(x, y, moving, frame, facing_right, attacking, attack_frame):
 # 몬스터 하나하나를 딕셔너리로 표현하고, 여러 마리를 리스트에 담아서 관리합니다.
 # 예: {"x": 100, "y": 200} 처럼 위치 정보를 가짐
 
-MONSTER_COUNT = 6      # 스테이지에 등장할 몬스터 수 (적게 유지)
+MONSTER_COUNT = 6      # (참고용) 한 번에 스폰되는 기본 수 - 웨이브 스폰에서는 WAVE_SIZE를 사용
 MONSTER_SPEED = 1.3    # 몬스터가 플레이어를 향해 다가오는 속도
+
+# ── 넉백(피격 시 밀려나기) 관련 설정 ──
+KNOCKBACK_SPEED = 6       # 넉백 중 밀려나는 속도 (일반 이동 속도보다 훨씬 빠르게)
+KNOCKBACK_DURATION = 10   # 넉백이 지속되는 프레임 수
 
 # ── 난이도 설계: 스테이지가 올라갈수록 몬스터가 더 단단해짐 ──
 BASE_MONSTER_HP = 100        # 1스테이지 몬스터 체력
@@ -177,6 +181,17 @@ current_stage = 1  # 지금 몇 번째 스테이지인지
 def get_current_monster_max_hp():
     """지금 스테이지 기준으로 몬스터가 가져야 할 최대 체력을 계산."""
     return BASE_MONSTER_HP + (current_stage - 1) * MONSTER_HP_PER_STAGE
+
+
+# ── 웨이브(시간차) 스폰 설정 ──
+# 처음에 5마리, 5초 후 5마리 추가, 10초 후 5마리 추가 -> 총 15마리
+WAVE_SIZE = 5                      # 한 번에 등장하는 몬스터 수
+TOTAL_WAVES = 3                    # 총 웨이브 횟수 (5 x 3 = 15마리)
+WAVE_INTERVAL_SECONDS = 5          # 웨이브 사이 간격(초)
+WAVE_INTERVAL_FRAMES = WAVE_INTERVAL_SECONDS * FPS  # 초 단위를 프레임 수로 변환
+
+stage_frame_count = 0   # 지금 스테이지가 시작된 뒤 몇 프레임이 지났는지 (경과 시간 계산용)
+waves_spawned = 1       # 지금까지 몇 번째 웨이브까지 등장했는지 (게임 시작 시 1웨이브는 바로 등장하므로 1부터 시작)
 
 
 def spawn_monsters(count):
@@ -200,12 +215,16 @@ def spawn_monsters(count):
                 "hp": monster_max_hp,
                 "max_hp": monster_max_hp,
                 "facing_right": True,
+                # 넉백 상태: knockback_timer가 0보다 크면 "밀려나는 중"이라는 뜻
+                "knockback_timer": 0,
+                "knockback_dx": 0,
+                "knockback_dy": 0,
             })
 
     return monsters
 
 
-monsters = spawn_monsters(MONSTER_COUNT)
+monsters = spawn_monsters(WAVE_SIZE)  # 첫 웨이브(5마리)만 즉시 등장
 
 
 def get_cone_points(center_x, center_y, radius, dir_x, dir_y, half_angle_deg=90, steps=16):
@@ -280,27 +299,38 @@ def draw_monster(m, camera_x, camera_y):
 
 
 def move_monster_toward_player(m):
-    """몬스터를 플레이어 방향으로 한 프레임만큼 이동시키는 함수."""
-    px, py = get_player_center()
-    mx_center = m["x"] + MONSTER_SIZE / 2
-    my_center = m["y"] + MONSTER_SIZE / 2
+    """몬스터를 이동시키는 함수. 넉백 중이면 넉백을, 아니면 평소처럼 플레이어를 추격."""
 
-    # 플레이어 방향 벡터 (얼마나 오른쪽/아래로 가야 하는지)
-    dx = px - mx_center
-    dy = py - my_center
-    distance = math.hypot(dx, dy)
+    # ── 넉백 중이면: 추격 이동을 건너뛰고 밀려나는 방향으로만 이동 ──
+    if m["knockback_timer"] > 0:
+        m["x"] += m["knockback_dx"] * KNOCKBACK_SPEED
+        m["y"] += m["knockback_dy"] * KNOCKBACK_SPEED
+        m["knockback_timer"] -= 1
+    else:
+        px, py = get_player_center()
+        mx_center = m["x"] + MONSTER_SIZE / 2
+        my_center = m["y"] + MONSTER_SIZE / 2
 
-    # 좌우로 이동하는 쪽으로만 facing_right 갱신 (플레이어와 완전히 같은 x좌표일 땐 유지)
-    if dx > 0.5:
-        m["facing_right"] = True
-    elif dx < -0.5:
-        m["facing_right"] = False
+        # 플레이어 방향 벡터 (얼마나 오른쪽/아래로 가야 하는지)
+        dx = px - mx_center
+        dy = py - my_center
+        distance = math.hypot(dx, dy)
 
-    if distance > 1:  # 0으로 나누는 것을 방지
-        # 방향을 "길이 1짜리 화살표"로 정규화한 뒤, 속도만큼만 이동
-        dx, dy = dx / distance, dy / distance
-        m["x"] += dx * MONSTER_SPEED
-        m["y"] += dy * MONSTER_SPEED
+        # 좌우로 이동하는 쪽으로만 facing_right 갱신 (플레이어와 완전히 같은 x좌표일 땐 유지)
+        if dx > 0.5:
+            m["facing_right"] = True
+        elif dx < -0.5:
+            m["facing_right"] = False
+
+        if distance > 1:  # 0으로 나누는 것을 방지
+            # 방향을 "길이 1짜리 화살표"로 정규화한 뒤, 속도만큼만 이동
+            dx, dy = dx / distance, dy / distance
+            m["x"] += dx * MONSTER_SPEED
+            m["y"] += dy * MONSTER_SPEED
+
+    # 넉백으로 맵 밖까지 밀려나지 않도록 위치 제한 (넉백/추격 이동 공통 적용)
+    m["x"] = max(0, min(m["x"], MAP_WIDTH - MONSTER_SIZE))
+    m["y"] = max(0, min(m["y"], MAP_HEIGHT - MONSTER_SIZE))
 
 
 # ── 5. 텍스트 표시 준비 ───────────────────────────────
@@ -310,9 +340,9 @@ big_font = pygame.font.SysFont(None, 64)
 
 
 def draw_hud():
-    """화면 상단에 스테이지, 남은 몬스터 수, 체력(남은 타격 횟수)을 표시."""
+    """화면 상단에 스테이지, 웨이브 진행, 남은 몬스터 수, 체력(남은 타격 횟수)을 표시."""
     hits_left = math.ceil(player_hp / DAMAGE_PER_HIT) if player_hp > 0 else 0
-    stage_text = font.render(f"스테이지: {current_stage}", True, BLACK)
+    stage_text = font.render(f"스테이지: {current_stage}  (웨이브 {min(waves_spawned, TOTAL_WAVES)}/{TOTAL_WAVES})", True, BLACK)
     hp_text = font.render(f"HP: {int(player_hp)}  (남은 목숨 {hits_left}번)", True, BLACK)
     monster_text = font.render(f"남은 몬스터: {len(monsters)}", True, BLACK)
     screen.blit(stage_text, (10, 10))
@@ -334,7 +364,16 @@ while running:
     # 게임 오버나 스테이지 클리어 상태에서는 이동/공격을 막고 싶다면
     # 아래 조건을 활용할 수 있습니다. (지금은 계속 조작 가능하게 둠)
     game_over = player_hp <= 0
-    stage_clear = len(monsters) == 0
+    # 몬스터가 0마리여도 아직 등장 안 한 웨이브가 남아있으면 클리어가 아님
+    stage_clear = len(monsters) == 0 and waves_spawned >= TOTAL_WAVES
+
+    # ── 웨이브 스폰 타이머 ──
+    if not game_over:
+        stage_frame_count += 1
+        # 다음 웨이브가 등장할 시점(프레임)이 됐는지 확인
+        if waves_spawned < TOTAL_WAVES and stage_frame_count >= waves_spawned * WAVE_INTERVAL_FRAMES:
+            monsters += spawn_monsters(WAVE_SIZE)  # 기존 리스트에 새 웨이브를 이어붙임
+            waves_spawned += 1
 
     if not game_over:
         # 이번 프레임에 눌린 방향키들을 하나의 (move_dx, move_dy) 벡터로 합침
@@ -416,6 +455,15 @@ while running:
 
             if in_range and in_front:
                 m["hp"] -= ATTACK_DAMAGE  # 사정거리 + 전방 180도 안에 있으면 데미지
+
+                # ── 넉백 발동: 플레이어 -> 몬스터 방향으로 밀어냄 ──
+                kb_distance = math.hypot(to_mx, to_my)
+                if kb_distance > 0:
+                    m["knockback_dx"] = to_mx / kb_distance
+                    m["knockback_dy"] = to_my / kb_distance
+                else:
+                    m["knockback_dx"], m["knockback_dy"] = 1, 0  # 완전히 겹친 경우 기본값
+                m["knockback_timer"] = KNOCKBACK_DURATION
 
             if m["hp"] > 0:
                 survivors.append(m)  # 체력이 남아있으면 생존
