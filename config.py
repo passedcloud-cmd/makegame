@@ -30,8 +30,13 @@ MONSTER_SIZE = 32
 # ── 플레이어 체력 ──
 MAX_HP = 100
 HITS_TO_DIE = 10
-DAMAGE_PER_HIT = MAX_HP / HITS_TO_DIE       # 100 / 10 = 10
+DAMAGE_PER_HIT = MAX_HP / HITS_TO_DIE       # 100 / 10 = 10 (몬스터의 기본 공격력)
 PLAYER_INVINCIBLE_DURATION = 30              # 피격 후 무적 프레임 수
+
+# ── 플레이어 스탯 특성: 높은 방어력 ──
+# 몬스터의 기본 공격력(DAMAGE_PER_HIT)에 이 배율을 곱해서 실제 데미지를 계산.
+# 0.4면 원래 데미지의 40%만 받는다는 뜻 (방어력이 높아 훨씬 적게 닳음)
+PLAYER_DEFENSE_MULTIPLIER = 0.4
 
 # ── 공격 ──
 ATTACK_RANGE = 70
@@ -57,3 +62,27 @@ WAVE_SIZE = 5
 TOTAL_WAVES = 3
 WAVE_INTERVAL_SECONDS = 5
 WAVE_INTERVAL_FRAMES = WAVE_INTERVAL_SECONDS * FPS
+
+# ── 보스 몬스터 ──
+BOSS_STAGES = {4, 5}           # 보스가 등장하는 스테이지 번호들 (마지막 웨이브에 등장)
+FINAL_STAGE = 5                # 이 스테이지를 클리어하면 엔딩
+BOSS_SIZE_MULTIPLIER = 2      # 일반 몬스터 대비 크기 배율
+BOSS_HP_MULTIPLIER = 3        # 일반 몬스터 대비 체력 배율
+BOSS_DAMAGE_MULTIPLIER = 3    # 일반 몬스터 대비 공격력(접촉 데미지) 배율
+BOSS_COLOR = (140, 30, 140)       # 보스 몸 색 (일반 몬스터=빨강과 구분되는 보라색)
+BOSS_OUTLINE_COLOR = (80, 10, 80)  # 보스 테두리 색
+
+# ── 동료(보호 대상) 캐릭터 ──
+# 아직 전용 그림이 없어서 도형으로 표시 (몬스터와 같은 방식)
+COMPANION_SIZE = 34
+COMPANION_MAX_HP = 100          # 플레이어와 동일하게 10번 맞으면 사망
+COMPANION_COLOR = (230, 200, 60)  # 노란색 계열 (플레이어=파랑, 몬스터=빨강과 구분)
+
+COMPANION_FOLLOW_DISTANCE = 55   # 플레이어 뒤에서 유지하려는 거리(px)
+COMPANION_FOLLOW_SPEED = 3.2     # 따라오는 속도 (플레이어보다 살짝 느리게 해서 자연스럽게 처짐)
+COMPANION_FOLLOW_DEAD_ZONE = 6   # 목표 지점과 이 거리 이내면 멈춤 (미세하게 떨리는 것 방지)
+
+# ── 동료 스탯 특성: 자가 힐(회복) 패시브 스킬 ──
+COMPANION_HEAL_INTERVAL_SECONDS = 5
+COMPANION_HEAL_INTERVAL_FRAMES = COMPANION_HEAL_INTERVAL_SECONDS * FPS
+COMPANION_HEAL_AMOUNT = 8   # 5초마다 회복되는 체력량

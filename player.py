@@ -170,8 +170,8 @@ def resolve_attack(player, monsters):
     survivors = []
 
     for m in monsters:
-        mx_center = m["x"] + config.MONSTER_SIZE / 2
-        my_center = m["y"] + config.MONSTER_SIZE / 2
+        mx_center = m["x"] + m["size"] / 2
+        my_center = m["y"] + m["size"] / 2
         to_mx, to_my = mx_center - px, my_center - py
         distance = math.hypot(to_mx, to_my)
 
@@ -201,15 +201,17 @@ def take_contact_damage(player, monsters):
         player["invincible_timer"] -= 1
 
     px, py = get_center(player)
-    touching_distance = (config.MONSTER_SIZE / 2) + (config.PLAYER_DISPLAY_SIZE[0] / 2)
 
     for m in monsters:
-        mx_center = m["x"] + config.MONSTER_SIZE / 2
-        my_center = m["y"] + config.MONSTER_SIZE / 2
+        mx_center = m["x"] + m["size"] / 2
+        my_center = m["y"] + m["size"] / 2
         distance = math.hypot(px - mx_center, py - my_center)
+        touching_distance = (m["size"] / 2) + (config.PLAYER_DISPLAY_SIZE[0] / 2)
 
         if distance < touching_distance and player["invincible_timer"] == 0:
-            player["hp"] -= config.DAMAGE_PER_HIT
+            # 방어력 특성 적용: 몬스터별 공격력(m["damage"])에 방어 배율을 곱해서 실제 피해량 계산
+            actual_damage = m["damage"] * config.PLAYER_DEFENSE_MULTIPLIER
+            player["hp"] -= actual_damage
             player["hp"] = max(0, player["hp"])
             player["invincible_timer"] = config.PLAYER_INVINCIBLE_DURATION  # 무적 시간은 기존 그대로
 
