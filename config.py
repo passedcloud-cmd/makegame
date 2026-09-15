@@ -38,10 +38,23 @@ PLAYER_INVINCIBLE_DURATION = 30              # 피격 후 무적 프레임 수
 # 0.4면 원래 데미지의 40%만 받는다는 뜻 (방어력이 높아 훨씬 적게 닳음)
 PLAYER_DEFENSE_MULTIPLIER = 0.4
 
+PLAYER_BASE_SPEED = 4.0   # 레벨/아이템으로 이동속도가 늘어나기 전 기본 이동속도
+
+# ── 성장 요소: 경험치 & 레벨업 ──
+# 몬스터를 처치하면 경험치를 얻고, 다 채우면 레벨업 하면서 스탯이 영구적으로 강해짐.
+XP_TO_LEVEL_BASE = 50        # 1 -> 2레벨에 필요한 경험치
+XP_TO_LEVEL_GROWTH = 25      # 레벨이 오를 때마다 다음 레벨에 필요한 경험치가 이만큼씩 늘어남
+LEVEL_UP_HP_BONUS = 8        # 레벨업 시 늘어나는 최대 체력 (동시에 체력 전부 회복)
+LEVEL_UP_DAMAGE_BONUS = 4    # 레벨업 시 늘어나는 공격력
+LEVEL_UP_SPEED_BONUS = 0.15  # 레벨업 시 늘어나는 이동속도
+LEVEL_UP_FLASH_DURATION = 45 # "LEVEL UP!" 문구가 보이는 프레임 수
+
 # ── 공격 ──
-ATTACK_RANGE = 70
-ATTACK_COOLDOWN = 20
+# 답답하지 않고 시원시원하게 느껴지도록 넓은 범위 + 짧은 쿨다운으로 설정
+ATTACK_RANGE = 115
+ATTACK_COOLDOWN = 15
 ATTACK_ANIM_TOTAL = 12                       # 공격 모션 재생 프레임 수
+ATTACK_FLASH_DURATION = 14                   # 공격 이펙트(부채꼴)가 화면에 보이는 프레임 수
 
 # ── 몬스터 이동 & 넉백 ──
 MONSTER_SPEED = 1.3
@@ -78,6 +91,64 @@ COMPANION_SIZE = 34
 COMPANION_MAX_HP = 100          # 플레이어와 동일하게 10번 맞으면 사망
 COMPANION_COLOR = (230, 200, 60)  # 노란색 계열 (플레이어=파랑, 몬스터=빨강과 구분)
 
+# ── 몬스터 종류(일반 외 3종) ──
+# 일반 몬스터(빨강)는 그대로 두고, 서로 다른 움직임 패턴을 가진 몬스터들을 추가.
+# 모든 배율은 "그 스테이지의 일반 몬스터" 기준(monster.get_current_monster_max_hp)으로 계산됨.
+
+# "fast": 작고 약하지만 훨씬 빠르며, 좌우로 흔들리며 접근해 맞추기 까다로움
+FAST_MONSTER_SIZE_MULTIPLIER = 0.75
+FAST_MONSTER_SPEED_MULTIPLIER = 2.1
+FAST_MONSTER_HP_MULTIPLIER = 0.5
+FAST_MONSTER_COLOR = (250, 150, 40)
+FAST_MONSTER_OUTLINE_COLOR = (180, 90, 10)
+FAST_WIGGLE_AMOUNT = 0.7    # 진행 방향에 수직으로 흔들리는 정도 (0~1)
+FAST_WIGGLE_SPEED = 0.25    # 흔들림(지그재그)이 진동하는 속도
+
+# "tank": 크고 느리지만 체력과 공격력이 훨씬 높은 몬스터
+TANK_MONSTER_SIZE_MULTIPLIER = 1.6
+TANK_MONSTER_SPEED_MULTIPLIER = 0.55
+TANK_MONSTER_HP_MULTIPLIER = 2.4
+TANK_MONSTER_DAMAGE_MULTIPLIER = 1.6
+TANK_MONSTER_COLOR = (90, 70, 150)
+TANK_MONSTER_OUTLINE_COLOR = (50, 35, 90)
+
+# "ranged": 일정 거리를 유지하며 투사체를 쏘는 몬스터 (근접하면 오히려 물러남)
+RANGED_MONSTER_SIZE_MULTIPLIER = 0.85
+RANGED_MONSTER_SPEED_MULTIPLIER = 0.9
+RANGED_MONSTER_HP_MULTIPLIER = 0.7
+RANGED_MONSTER_COLOR = (40, 170, 170)
+RANGED_MONSTER_OUTLINE_COLOR = (15, 100, 100)
+RANGED_PREFERRED_DISTANCE = 220        # 유지하려는 거리(px)
+RANGED_DISTANCE_MARGIN = 30            # 이 오차 범위 안이면 멈춰서 사격만 함
+RANGED_ATTACK_RANGE = 320              # 이 거리 이내에 있어야 사격 시도
+RANGED_ATTACK_COOLDOWN_FRAMES = 90     # 발사 간격 (1.5초)
+RANGED_PROJECTILE_SPEED = 5.5
+RANGED_PROJECTILE_SIZE = 9
+RANGED_PROJECTILE_DAMAGE_MULTIPLIER = 0.75   # DAMAGE_PER_HIT 대비 배율 (플레이어는 방어배율도 추가 적용)
+RANGED_PROJECTILE_COLOR = (40, 200, 200)
+
+# ── 몬스터 처치 시 얻는 경험치 (종류별) ──
+XP_REWARD_NORMAL = 15
+XP_REWARD_FAST = 10
+XP_REWARD_TANK = 25
+XP_REWARD_RANGED = 20
+XP_REWARD_BOSS = 150
+
+# ── 아이템 드랍/획득 ──
+ITEM_DROP_CHANCE = 0.25    # 일반 몬스터가 아이템을 떨어뜨릴 확률 (보스는 항상 드랍)
+ITEM_SIZE = 18
+ITEM_BOB_SPEED = 0.12       # 바닥에 놓인 아이템이 위아래로 떠 있는 애니메이션 속도
+ITEM_BOB_AMOUNT = 4         # 떠 있는 폭(px)
+ITEM_PICKUP_FLASH_DURATION = 30   # 습득 문구가 떠 있는 프레임 수
+
+ITEM_HEAL_AMOUNT = 30       # "heal" 아이템: 즉시 회복량
+ITEM_POWER_BONUS = 3        # "power" 아이템: 영구 공격력 증가량
+ITEM_SPEED_BONUS = 0.3      # "speed" 아이템: 영구 이동속도 증가량
+
+ITEM_HEAL_COLOR = (230, 60, 90)
+ITEM_POWER_COLOR = (250, 150, 40)
+ITEM_SPEED_COLOR = (60, 190, 230)
+
 COMPANION_FOLLOW_DISTANCE = 55   # 플레이어 뒤에서 유지하려는 거리(px)
 COMPANION_FOLLOW_SPEED = 3.2     # 따라오는 속도 (플레이어보다 살짝 느리게 해서 자연스럽게 처짐)
 COMPANION_FOLLOW_DEAD_ZONE = 6   # 목표 지점과 이 거리 이내면 멈춤 (미세하게 떨리는 것 방지)
@@ -86,3 +157,14 @@ COMPANION_FOLLOW_DEAD_ZONE = 6   # 목표 지점과 이 거리 이내면 멈춤 
 COMPANION_HEAL_INTERVAL_SECONDS = 5
 COMPANION_HEAL_INTERVAL_FRAMES = COMPANION_HEAL_INTERVAL_SECONDS * FPS
 COMPANION_HEAL_AMOUNT = 8   # 5초마다 회복되는 체력량
+
+# ── 화면 흐름: 대기 화면 / 일시정지 / 스테이지 클리어 ──
+STAGE_CLEAR_DURATION = 120   # "STAGE CLEAR!" 문구가 보이며 쉬는 시간 (2초), 끝나면 자동으로 STORY로 전환
+
+# ── 사운드 볼륨 (환경설정 화면에서 조절) ──
+DEFAULT_BGM_VOLUME = 0.4
+DEFAULT_SFX_VOLUME = 0.6
+VOLUME_STEP = 0.1
+
+# ── 메뉴류 화면 공용 버튼 색 ──
+MENU_SECONDARY_COLOR = (90, 130, 200)   # "환경 설정", "뒤로가기"처럼 강조가 필요 없는 버튼

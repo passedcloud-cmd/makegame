@@ -18,6 +18,7 @@ def create_player():
         "x": config.MAP_WIDTH // 2,
         "y": config.MAP_HEIGHT // 2,
         "hp": config.MAX_HP,
+        "max_hp": config.MAX_HP,   # 레벨업 시 늘어남 (config.MAX_HP는 시작값 그대로 유지)
 
         "facing_dx": 0, "facing_dy": 1,   # 공격 부채꼴 방향 계산용 (모든 방향 포함)
         "facing_right": True,             # 좌우 이미지 반전 전용
@@ -38,6 +39,14 @@ def create_player():
         "knockback_timer": 0,
         "knockback_dx": 0,
         "knockback_dy": 0,
+
+        # ── 성장 요소: 레벨/경험치와 레벨업으로 쌓이는 보너스 스탯 ──
+        "level": 1,
+        "xp": 0,
+        "xp_to_next": config.XP_TO_LEVEL_BASE,
+        "bonus_damage": 0,       # 레벨업 + power 아이템으로 누적되는 추가 공격력
+        "bonus_speed": 0.0,      # 레벨업 + speed 아이템으로 누적되는 추가 이동속도
+        "level_up_flash_timer": 0,
     }
 
 
@@ -83,7 +92,7 @@ def handle_movement(player, keys):
         return  # 경직 중엔 WASD 입력을 무시
 
     move_dx, move_dy = 0, 0
-    speed = 4
+    speed = config.PLAYER_BASE_SPEED + player["bonus_speed"]
 
     if keys[pygame.K_w]:
         player["y"] -= speed
@@ -128,14 +137,14 @@ def start_attack(player):
         return False
 
     player["attack_cooldown_timer"] = config.ATTACK_COOLDOWN
-    player["attack_flash_timer"] = 10
+    player["attack_flash_timer"] = config.ATTACK_FLASH_DURATION
     player["is_attacking"] = True
     player["attack_anim_timer"] = 0
     return True
 
 
 def update_timers(player):
-    """공격 쿨다운, 공격 애니메이션 진행을 매 프레임 갱신."""
+    """공격 쿨다운, 공격 애니메이션, 레벨업 문구 표시 시간을 매 프레임 갱신."""
     if player["attack_cooldown_timer"] > 0:
         player["attack_cooldown_timer"] -= 1
 
@@ -145,6 +154,31 @@ def update_timers(player):
         if player["attack_anim_timer"] >= config.ATTACK_ANIM_TOTAL:
             player["is_attacking"] = False
             player["attack_anim_timer"] = 0
+
+    if player["level_up_flash_timer"] > 0:
+        player["level_up_flash_timer"] -= 1
+
+
+def add_xp(player, amount):
+    """경험치를 추가하고, 필요하면 레벨업을 처리 (한 번에 여러 레벨도 가능).
+    레벨업마다 최대체력/공격력/이동속도가 영구적으로 늘어나고 체력이 전부 회복됨.
+    이번 호출로 레벨업이 한 번이라도 일어났는지 여부를 반환."""
+    player["xp"] += amount
+    leveled_up = False
+
+    while player["xp"] >= player["xp_to_next"]:
+        player["xp"] -= player["xp_to_next"]
+        player["level"] += 1
+        player["xp_to_next"] += config.XP_TO_LEVEL_GROWTH
+
+        player["max_hp"] += config.LEVEL_UP_HP_BONUS
+        player["hp"] = player["max_hp"]
+        player["bonus_damage"] += config.LEVEL_UP_DAMAGE_BONUS
+        player["bonus_speed"] += config.LEVEL_UP_SPEED_BONUS
+        player["level_up_flash_timer"] = config.LEVEL_UP_FLASH_DURATION
+        leveled_up = True
+
+    return leveled_up
 
 
 def get_cone_points(center_x, center_y, radius, dir_x, dir_y, half_angle_deg=90, steps=16):
@@ -164,10 +198,14 @@ def get_cone_points(center_x, center_y, radius, dir_x, dir_y, half_angle_deg=90,
 def resolve_attack(player, monsters):
     """
     공격 사정거리 + 전방 180도 안에 있는 몬스터에게 데미지와 넉백을 주고,
-    체력이 남은 몬스터만 담은 새 리스트를 반환 (죽은 몬스터는 자동 제거).
+    (생존한 몬스터 리스트, 이번 공격이 하나라도 명중했는지 여부, 이번에 죽은 몬스터 리스트)를 반환.
+    명중 여부는 타격 효과음 재생에, 죽은 몬스터 리스트는 경험치 지급/아이템 드랍 처리에 쓰임(main.py).
     """
     px, py = get_center(player)
     survivors = []
+    killed_monsters = []
+    hit_something = False
+    damage = config.ATTACK_DAMAGE + player["bonus_damage"]
 
     for m in monsters:
         mx_center = m["x"] + m["size"] / 2
@@ -180,7 +218,8 @@ def resolve_attack(player, monsters):
         in_front = dot >= 0
 
         if in_range and in_front:
-            m["hp"] -= config.ATTACK_DAMAGE
+            m["hp"] -= damage
+            hit_something = True
 
             if distance > 0:
                 m["knockback_dx"] = to_mx / distance
@@ -191,8 +230,10 @@ def resolve_attack(player, monsters):
 
         if m["hp"] > 0:
             survivors.append(m)
+        else:
+            killed_monsters.append(m)
 
-    return survivors
+    return survivors, hit_something, killed_monsters
 
 
 def take_contact_damage(player, monsters):
@@ -250,14 +291,32 @@ def draw(screen, player, images, camera_x, camera_y):
     screen.blit(current_image, (screen_x, screen_y))
 
     center_x = screen_x + config.PLAYER_DISPLAY_SIZE[0] / 2
-    ui.draw_hp_bar(screen, center_x, screen_y - 14, player["hp"], config.MAX_HP, bar_width=40, bar_height=6)
+    ui.draw_hp_bar(screen, center_x, screen_y - 14, player["hp"], player["max_hp"], bar_width=40, bar_height=6)
+
+    # 레벨업 직후 "LEVEL UP!" 문구를 잠깐 위로 떠오르며 표시 (동료의 회복 이펙트와 같은 방식)
+    if player["level_up_flash_timer"] > 0:
+        rise_offset = (config.LEVEL_UP_FLASH_DURATION - player["level_up_flash_timer"]) * 0.6
+        font = pygame.font.SysFont(None, 28)
+        text_surface = font.render("LEVEL UP!", True, config.GREEN)
+        screen.blit(text_surface, (center_x - text_surface.get_width() / 2, screen_y - 34 - rise_offset))
 
 
 def draw_attack_effect(screen, player, camera_x, camera_y):
-    """공격 시 잠깐 보이는 전방 180도 부채꼴 이펙트를 그림."""
+    """공격 시 잠깐 보이는 전방 180도 부채꼴 이펙트를 그림.
+    반투명 채우기 + 밝은 테두리를 함께 써서, 넓어진 공격 범위가 시원시원하게 느껴지도록 함.
+    시간이 지날수록(attack_flash_timer가 줄어들수록) 옅어지며 사라짐."""
     if player["attack_flash_timer"] > 0:
         px, py = get_center(player)
         screen_x, screen_y = px - camera_x, py - camera_y
         cone_points = get_cone_points(screen_x, screen_y, config.ATTACK_RANGE, player["facing_dx"], player["facing_dy"])
-        pygame.draw.lines(screen, config.GREEN, True, cone_points, 3)
+
+        progress = player["attack_flash_timer"] / config.ATTACK_FLASH_DURATION  # 1.0 -> 0.0
+        fill_alpha = int(150 * progress)
+        outline_alpha = int(255 * progress)
+
+        effect_surface = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
+        pygame.draw.polygon(effect_surface, (*config.GREEN, fill_alpha), cone_points)
+        pygame.draw.lines(effect_surface, (*config.GREEN, outline_alpha), True, cone_points, 4)
+        screen.blit(effect_surface, (0, 0))
+
         player["attack_flash_timer"] -= 1

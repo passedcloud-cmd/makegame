@@ -61,30 +61,36 @@ def create_fonts():
 
     if font_path:
         return {
+            "small": pygame.font.Font(font_path, 22),
             "normal": pygame.font.Font(font_path, 32),
             "big": pygame.font.Font(font_path, 64),
         }
     else:
         # 한글 지원 폰트를 못 찾은 경우 - 영어 텍스트는 정상 표시되지만 한글은 깨질 수 있음
         return {
+            "small": pygame.font.SysFont(None, 22),
             "normal": pygame.font.SysFont(None, 32),
             "big": pygame.font.SysFont(None, 64),
         }
 
 
 def draw_hud(screen, fonts, current_stage, waves_spawned, total_waves, player, monster_count):
-    """화면 상단에 스테이지, 웨이브 진행, 체력, 남은 몬스터 수를 표시."""
+    """화면 상단에 스테이지, 웨이브 진행, 레벨/경험치, 체력, 남은 몬스터 수를 표시."""
     font = fonts["normal"]
     hits_left = math.ceil(player["hp"] / config.DAMAGE_PER_HIT) if player["hp"] > 0 else 0
 
     stage_text = font.render(
         f"스테이지: {current_stage}  (웨이브 {min(waves_spawned, total_waves)}/{total_waves})", True, config.BLACK)
-    hp_text = font.render(f"HP: {int(player['hp'])}  (남은 목숨 {hits_left}번)", True, config.BLACK)
+    level_text = font.render(
+        f"레벨 {player['level']}  (EXP {int(player['xp'])}/{player['xp_to_next']})", True, config.BLACK)
+    hp_text = font.render(
+        f"HP: {int(player['hp'])}/{int(player['max_hp'])}  (남은 목숨 {hits_left}번)", True, config.BLACK)
     monster_text = font.render(f"남은 몬스터: {monster_count}", True, config.BLACK)
 
     screen.blit(stage_text, (10, 10))
-    screen.blit(hp_text, (10, 40))
-    screen.blit(monster_text, (10, 70))
+    screen.blit(level_text, (10, 40))
+    screen.blit(hp_text, (10, 70))
+    screen.blit(monster_text, (10, 100))
 
 
 def draw_end_message(screen, fonts, text, color):
@@ -124,3 +130,28 @@ def draw_restart_button(screen, fonts, label="Restart"):
     screen.blit(text_surface, text_rect)
 
     return rect
+
+
+def get_menu_button_rect(fonts, label, center_x, center_y, width=None, height=50):
+    """
+    메인 화면/일시정지/환경설정처럼 버튼 여러 개가 특정 좌표에 나열되는 화면에서 쓰는 범용 버튼 Rect 계산.
+    width를 지정하지 않으면 label 글자 길이에 맞춰 자동으로 넓힘 (get_restart_button_rect와 같은 방식).
+    그리기(draw_menu_button)와 클릭 판정 양쪽에서 반드시 같은 인자로 호출해야 같은 위치/크기를 보장함.
+    """
+    if width is None:
+        text_width = fonts["normal"].size(label)[0]
+        width = max(160, text_width + 48)
+
+    rect = pygame.Rect(0, 0, width, height)
+    rect.center = (center_x, center_y)
+    return rect
+
+
+def draw_menu_button(screen, fonts, label, rect, bg_color=None):
+    """get_menu_button_rect()로 계산한 Rect 위치에 버튼을 그림."""
+    bg_color = bg_color if bg_color is not None else config.GREEN
+    pygame.draw.rect(screen, bg_color, rect, border_radius=8)
+    pygame.draw.rect(screen, config.BLACK, rect, 2, border_radius=8)
+
+    text_surface = fonts["normal"].render(label, True, config.WHITE)
+    screen.blit(text_surface, text_surface.get_rect(center=rect.center))
